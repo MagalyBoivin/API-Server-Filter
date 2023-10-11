@@ -3,6 +3,8 @@ import { v1 as uuidv1 } from "uuid";
 import * as utilities from "../utilities.js";
 import { log } from "../log.js";
 import RepositoryCachesManager from "./repositoryCachesManager.js";
+import queryString from "query-string";
+import collectionFilter from "../collectionFilter.js";
 
 globalThis.jsonFilesPath = "jsonFiles";
 globalThis.repositoryEtags = {};
@@ -33,35 +35,35 @@ export default class Repository {
     read() {
         this.objectsList = null;
         if (this.cached) {
-          this.objectsList = RepositoryCachesManager.find(this.objectsName);
+            this.objectsList = RepositoryCachesManager.find(this.objectsName);
         }
         if (this.objectsList == null) {
-          try {
-            let rawdata = fs.readFileSync(this.objectsFile);
-            // we assume here that the json data is formatted correctly
-            this.objectsList = JSON.parse(rawdata);
-            if (this.cached)
-              RepositoryCachesManager.add(this.objectsName, this.objectsList);
-          } catch (error) {
-            if (error.code === 'ENOENT') {
-              // file does not exist, it will be created on demand
-              log(FgYellow,`Warning ${this.objectsName} repository does not exist. It will be created on demand`);
-              this.objectsList = [];
-            } else {
-              log(FgRed,`Error while reading ${this.objectsName} repository`);
-              log(FgRed,'--------------------------------------------------');
-              log(FgRed,error);
+            try {
+                let rawdata = fs.readFileSync(this.objectsFile);
+                // we assume here that the json data is formatted correctly
+                this.objectsList = JSON.parse(rawdata);
+                if (this.cached)
+                    RepositoryCachesManager.add(this.objectsName, this.objectsList);
+            } catch (error) {
+                if (error.code === 'ENOENT') {
+                    // file does not exist, it will be created on demand
+                    log(FgYellow, `Warning ${this.objectsName} repository does not exist. It will be created on demand`);
+                    this.objectsList = [];
+                } else {
+                    log(FgRed, `Error while reading ${this.objectsName} repository`);
+                    log(FgRed, '--------------------------------------------------');
+                    log(FgRed, error);
+                }
             }
-          }
         }
-      }
-      write() {
+    }
+    write() {
         this.newETag();
         fs.writeFileSync(this.objectsFile, JSON.stringify(this.objectsList));
         if (this.cached) {
-          RepositoryCachesManager.add(this.objectsName, this.objectsList);
+            RepositoryCachesManager.add(this.objectsName, this.objectsList);
         }
-      }
+    }
     nextId() {
         let maxId = 0;
         for (let object of this.objects()) {
@@ -129,16 +131,50 @@ export default class Repository {
         }
         return false;
     }
-    getAll(HttpContext) {
-        // TODO modifier afin de prendre en compte la query string
-        console.log("in get all");
-        console.log(HttpContext);
+    getAll(requestPayload) {
         let objectsList = this.objects();
         let bindedDatas = [];
-        if (objectsList)
-            for (let data of objectsList) {
+        let newObjectsList = null;
+        if (requestPayload !== null) {
+            if ('sort' in requestPayload) {
+                log(FgYellow, "Param sort");
+                newObjectsList = collectionFilter.Sort(requestPayload['sort'], objectsList);
+            }
+            if ('name' in requestPayload) {
+                log(FgYellow, "Param name");
+                newObjectsList = collectionFilter.Name(requestPayload['name'], objectsList);
+            }
+            if ('category' in requestPayload) {
+                log(FgYellow, "Param category");
+                newObjectsList = collectionFilter.Category(requestPayload['category'], objectsList);
+            }
+            if ('field' in requestPayload) {
+                log(FgYellow, "Param field");
+                newObjectsList = collectionFilter.Field(requestPayload['field'], objectsList);
+                return newObjectsList; // c'est juste une liste, pas une liste d'objets
+            }
+            if ('fields' in requestPayload) {
+                log(FgYellow, "Param fields");
+                newObjectsList = collectionFilter.Fields(requestPayload['fields'], objectsList);
+            }
+            else if ('limit' in requestPayload && 'offset' in requestPayload) {
+                log(FgYellow, "Param limit offset");
+                newObjectsList = collectionFilter.LimitOffset(requestPayload['limit'], requestPayload['offset'], objectsList)
+            }
+        }
+        else {
+            log(FgYellow, "No request payload -> GetAll ");
+            newObjectsList = objectsList;
+        }
+        if (Array.isArray(newObjectsList)) {
+            for (let data of newObjectsList) {
                 bindedDatas.push(this.model.bindExtraData(data));
             };
+        }
+        else {
+            bindedDatas.push(this.model.bindExtraData(newObjectsList));
+        }
+
         return bindedDatas;
     }
     get(id) {

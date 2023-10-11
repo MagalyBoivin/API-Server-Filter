@@ -22,7 +22,7 @@ export default class Controller {
                     this.HttpContext.response.badRequest("The Id in the request url is rather not specified or syntactically wrong.");
             }
             else
-                this.HttpContext.response.JSON(this.repository.getAll(this.HttpContext), this.repository.ETag);
+                this.HttpContext.response.JSON(this.repository.getAll(this.HttpContext.payload), this.repository.ETag);
         }
         else
             this.HttpContext.response.notImplemented();
