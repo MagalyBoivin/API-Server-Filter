@@ -15,6 +15,14 @@ export default class Model {
     addField(propertyName, propertyType) {
         this.fields.push({ name: propertyName, type: propertyType });
     }
+    isMember(propertyName){
+        let exist = false;
+        this.fields.forEach(field => {
+            if (field.name == propertyName)
+                exist = true;
+        })
+        return exist;
+    }
     setKey(key) {
         this.key = key;
     }

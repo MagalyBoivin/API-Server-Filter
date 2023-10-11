@@ -12,7 +12,7 @@ export default class APIServer {
         this.port = port;
         this.initMiddlewaresPipeline();
         this.httpContext = null;
-        this.httpServer = createServer(async (req, res) => { this.handleHttpResquest(req, res) });
+        this.httpServer = createServer(async (req, res) => { this.handleHttpRequest(req, res) });
     }
     initMiddlewaresPipeline() {
 
@@ -26,7 +26,7 @@ export default class APIServer {
 
         this.middlewaresPipeline.add(router.API_EndPoint);
     }
-    async handleHttpResquest(req, res) {
+    async handleHttpRequest(req, res) {
         this.markRequestProcessStartTime();
         this.httpContext = await HttpContext.create(req, res);
         this.showShortRequestInfo();
