@@ -18,6 +18,7 @@ export default class Repository {
         this.objectsFile = `./jsonFiles/${this.objectsName}.json`;
         this.initEtag();
         this.cached = cached;
+
     }
     initEtag() {
         if (this.objectsName in repositoryEtags)
@@ -135,46 +136,87 @@ export default class Repository {
         let objectsList = this.objects();
         let bindedDatas = [];
         let newObjectsList = null;
+        let validQuery = false;
         if (requestPayload !== null) {
-            if ('sort' in requestPayload) {
-                log(FgYellow, "Param sort");
-                newObjectsList = collectionFilter.Sort(requestPayload['sort'], objectsList);
-            }
-            if ('name' in requestPayload) {
-                log(FgYellow, "Param name");
-                newObjectsList = collectionFilter.Name(requestPayload['name'], objectsList);
-            }
-            if ('category' in requestPayload) {
-                log(FgYellow, "Param category");
-                newObjectsList = collectionFilter.Category(requestPayload['category'], objectsList);
-            }
-            if ('field' in requestPayload) {
-                log(FgYellow, "Param field");
-                newObjectsList = collectionFilter.Field(requestPayload['field'], objectsList);
-                return newObjectsList; // c'est juste une liste, pas une liste d'objets
-            }
-            if ('fields' in requestPayload) {
-                log(FgYellow, "Param fields");
-                newObjectsList = collectionFilter.Fields(requestPayload['fields'], objectsList);
-            }
-            else if ('limit' in requestPayload && 'offset' in requestPayload) {
-                log(FgYellow, "Param limit offset");
-                newObjectsList = collectionFilter.LimitOffset(requestPayload['limit'], requestPayload['offset'], objectsList)
-            }
+            let [validQuery, paramError] = this.validQuery(requestPayload);
+            console.log(validQuery);
+            console.log(`request payload:`)
+            console.log(requestPayload)
+            console.log(requestPayload['offset'])
+            if (validQuery) {
+                if ('sort' in requestPayload) {
+                    log(FgYellow, "Sort...");
+                    let [estvalide, field, asc, desc, paramError] = this.CheckSortFilter(requestPayload['sort']);
+                    if (estvalide)
+                        newObjectsList = collectionFilter.Sort(field, objectsList, asc, desc);
+                    else {
+                        log(FgRed, paramError.error);
+                        return paramError;
+                    }
+                }
+                if ('Name' in requestPayload) {
+                    log(FgYellow, "Param name");
+                    let [estvalide, paramError] = this.CheckSortNameFilter(requestPayload['Name'])
+                    if (estvalide) {
+                        newObjectsList = collectionFilter.Name(requestPayload['Name'], newObjectsList == null ? objectsList : newObjectsList);
+                    }
+                    else
+                        return paramError;
+                } else console.log("no name")
+                if ('Category' in requestPayload) {
+                    log(FgYellow, "Param category");
+                    let paramError = { error: '' }
+                    if (this.model.isMember('Category')) {
+                        newObjectsList = collectionFilter.Category(requestPayload['Category'], newObjectsList == null ? objectsList : newObjectsList);
+                    } else {
+                        return paramError.error = `Le modèle ne contient pas le membre 'Category'`;
+                    }
+                }
+                if ('field' in requestPayload) {
+                    log(FgYellow, "Param field");
+                    let [estvalide, fields, paramError] = this.CheckField(requestPayload['field'])
+                    if (estvalide) {
+                        newObjectsList = collectionFilter.Field(fields, newObjectsList == null ? objectsList : newObjectsList);
+                        //return newObjectsList; // c'est juste une liste, pas une liste d'objets
+                    } else
+                        return paramError;
+                }
+                if ('fields' in requestPayload) {
+                    log(FgYellow, "Param fields");
+                    let [estvalide, fields, paramError] = this.CheckFields(requestPayload['fields'])
+                    if (estvalide)
+                        newObjectsList = collectionFilter.Fields(newObjectsList == null ? objectsList : newObjectsList, fields);
+                    else
+                        return paramError;
+                }
+                if ('limit' in requestPayload && 'offset' in requestPayload) {
+                    log(FgYellow, "Param limit offset");
+                    let [estvalid, paramError] = this.CheckLimitOffset(requestPayload['limit'], requestPayload['offset']);
+                    if (estvalid)
+                        newObjectsList = collectionFilter.LimitOffset(requestPayload['limit'], requestPayload['offset'], newObjectsList == null ? objectsList : newObjectsList)
+
+                    else
+                        return paramError;
+                }
+            } else
+                return paramError;
         }
         else {
             log(FgYellow, "No request payload -> GetAll ");
             newObjectsList = objectsList;
         }
-        if (Array.isArray(newObjectsList)) {
+        // Check if the new formed list is an array of objects
+        if (Array.isArray(newObjectsList) && typeof newObjectsList[0] === "object") {
+            //binds each objects to the model
             for (let data of newObjectsList) {
                 bindedDatas.push(this.model.bindExtraData(data));
             };
         }
+        // else, returns the list
         else {
-            bindedDatas.push(this.model.bindExtraData(newObjectsList));
+            return newObjectsList;
+            //bindedDatas.push(this.model.bindExtraData(newObjectsList));
         }
-
         return bindedDatas;
     }
     get(id) {
@@ -212,5 +254,179 @@ export default class Repository {
             index++;
         }
         return -1;
+    }
+
+    validQuery(payload) {
+        log(FgYellow, "Validating query...");
+        let paramError = { error: '' }
+        let isValid = true;
+        let validParams = ['sort', 'limit', 'offset', 'field', 'fields', 'Name', 'Category']
+        for (let [param, value] of Object.entries(payload)) {
+            if (!param in validParams || param == undefined) {
+                paramError.error = `Parameter '${param}=${value}' unknown.`
+                isValid = false
+            }
+            if (value == undefined || value == ''){
+                paramError.error = `Value of '${param}' parameter missing.`
+                isValid = false
+            }
+        }
+        if ('limit' in payload) {
+            if (! "offset" in payload) {
+                paramError.error = "Offset parameter missing"
+                isValid = false
+            }
+        }
+        if ('offset' in payload) {
+            if (!'limit' in payload) {
+                paramError.error = "Limit parameter missing"
+                isValid = false
+            }
+        }
+
+        return [isValid, paramError];
+    }
+
+    CheckSortFilter(sortQuery) {
+        let filter = null
+        let asc = null
+        let desc = null;
+        let isvalid = true;
+        let paramError = { error: "" };
+
+        if (sortQuery.includes(',')) {
+            filter = sortQuery.split(',')[0];
+            filter = filter[0].toUpperCase() + filter.slice(1)
+            if (filter.toUpperCase() == 'NAME')
+                filter = 'Title'
+            if (sortQuery.split(',')[1] == 'asc')
+                asc = true;
+            else if (sortQuery.split(',')[1] == 'desc') {
+                desc = true;
+            }
+            else {
+                isvalid = false;
+                paramError.error = `Paramètre de tri '${sortQuery.split(',')[1]}' invalide.`;
+            }
+        }
+        else {
+            filter = sortQuery[0].toUpperCase() + sortQuery.slice(1)
+            if (filter.toUpperCase() == "CATEGORY") desc = true;
+            else if (filter.toUpperCase() == "NAME") {
+                asc = true
+                console.log("filter name")
+                filter = 'Title'
+            }
+        }
+        if (!this.model.isMember(filter)) {
+            console.log(filter)
+            console.log("invalide")
+            isvalid = false;
+            paramError.error = `Paramètre de tri '${filter}' invalide.`;
+        }
+        return [isvalid, filter, asc, desc, paramError];
+    }
+
+    CheckSortNameFilter(nameQuery) { // check if model has 'Title' proprety 
+        let isvalid = true;
+        let field = null;
+        let paramError = { error: "" }
+        console.log("Name querrry:")
+        console.log(nameQuery)
+        if (this.objectsName == "Bookmarks") {
+            field = "Title";
+            if (!this.model.isMember(field)) {
+                isvalid = false;
+                paramError.error = `Le modèle de données "${this.objectsName}" ne contient pas la propriété '${filter}'.`;
+            }
+        }
+        if (nameQuery.includes("*")) {
+            let indexes = this.indexesOf(nameQuery, '*')
+            let count = indexes.length
+            if (count > 2) {
+                isvalid = false;
+            }
+            else if (count == 1) {
+                if ((indexes != 0 && indexes != nameQuery.length - 1) || nameQuery == "*")  // au debut ou a la fin
+                    isvalid = false;
+            }
+            else if (count == 2) {
+                if (indexes[0] != 0 || indexes[1] != nameQuery.length - 1 || nameQuery == "**")  // au debut et a la fin
+                    isvalid = false;
+            }
+            if (!isvalid)
+                paramError.error = `Le format de la requête 'Name=${nameQuery}' est invalide.`;
+        }
+        return [isvalid, paramError];
+    }
+    indexesOf(string, char) {
+        let count = 0;
+        let indexes = [];
+        for (let index = 0; index < string.length; index++) {
+            if (string[index] == char) {
+                indexes[count] = index;
+                count = count + 1;
+            }
+        }
+        return indexes;
+    }
+
+    CheckFields(fieldsString) {
+        console.log("check fields");
+        let paramError = { error: '' };
+        let isvalid = true;
+        let fields = fieldsString.split(',');
+        let myFields = [];
+        fields.forEach(field => {
+            field = field[0].toUpperCase() + field.slice(1);
+            myFields.push(field)
+            if (!this.model.isMember(field)) {
+                isvalid = false;
+                if (field.length < 1)
+                    paramError.error = `Erreur dans l'écriture des paramètres fields.`;
+                else
+                    paramError.error = `Le modèle de données ${this.objectsName} ne contient pas la propriété '${field}'.`;
+            }
+        });
+        console.log(myFields);
+        return [isvalid, myFields, paramError];
+    }
+    CheckField(fieldString) {
+        console.log("check field");
+        let paramError = { error: '' };
+        let isvalid = true;
+        let field = fieldString[0].toUpperCase() + fieldString.slice(1);
+        if (!this.model.isMember(field)) {
+            isvalid = false;
+            if (field.length < 1)
+                paramError.error = `Erreur dans l'écriture des paramètres fields.`;
+            else
+                paramError.error = `Le modèle de données ${this.objectsName} ne contient pas la propriété '${field}'.`;
+        }
+        return [isvalid, field, paramError];
+    }
+    CheckLimitOffset(limit, offset) {
+
+        let isvalid = true
+        let paramError = { error: '' }
+        console.log(" limit: " + limit + " offset: " + offset);
+        if (!this.isPositiveInteger(limit)) {
+            isvalid = false;
+            paramError.error = `Limit parameter must be an integer greater or equal to 0`;
+        }
+        else if (!this.isPositiveInteger(offset)) {
+            isvalid = false;
+            paramError.error = `Offset parameter must be an integer greater or equal to 0`;
+        }
+        else if (parseInt(offset) < parseInt(limit) || parseInt(offset) == parseInt(limit)) {
+            isvalid = false; 2
+            paramError.error = "Offset number parameter cannot be equal or lesser than the limit number parameter";
+        }
+        return [isvalid, paramError]
+    }
+
+    isPositiveInteger(value) {
+        let regex = new RegExp(/^[0-9]*$/)
+        return (regex.test(value));
     }
 }

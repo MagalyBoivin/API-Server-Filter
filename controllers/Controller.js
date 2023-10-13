@@ -21,8 +21,18 @@ export default class Controller {
                 } else
                     this.HttpContext.response.badRequest("The Id in the request url is rather not specified or syntactically wrong.");
             }
-            else
-                this.HttpContext.response.JSON(this.repository.getAll(this.HttpContext.payload), this.repository.ETag);
+            else {
+                let data = this.repository.getAll(this.HttpContext.payload)
+                if (data != null) {
+                    if (data.error == null)
+                        this.HttpContext.response.JSON(data, this.repository.ETag);
+                    else
+                        this.HttpContext.response.badRequest(data.error);
+                }
+                else
+                    this.HttpContext.response.badRequest("The request url is syntactically wrong.");
+
+            }
         }
         else
             this.HttpContext.response.notImplemented();
