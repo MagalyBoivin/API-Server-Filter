@@ -13,38 +13,49 @@ export default class collectionFilter {
             return objectsList.sort((a, b) => a[field].toLowerCase().localeCompare(b[field].toLowerCase()))
 
     }
-    static Name(query, objectsList) {
-        console.log("in name...")
-        if (!query.includes('*')) // just the name
-            return objectsList.find(({ Title }) => Title.toLowerCase() === query.toLowerCase());
-        else if (query.endsWith('*') && query.startsWith('*')) {
+    static Propriete(query, objectsList) {
+        console.log("in propriete...")
+        console.log(query)
+        let field = Object.keys(query);
+        let value = query[field];
+        
+        if (!value.includes('*')){ // just the value
+            if(Array.isArray(objectsList))
+                return objectsList.find(o => o[field] === value);
+            else{ // only one obj or none
+                if(objectsList.length > 0)
+                    objectsList[field] == value ? objectsList : null
+            }
+        }
+        
+        else if (value.endsWith('*') && value.startsWith('*')) {
             let mylist = [];
-            query = query.replaceAll('*', '');
-            console.log("Titres contenant: " + query)
-            if (query.length > 0) {
+            value = value.replaceAll('*', '');
+            console.log("Titres contenant: " + value)
+            if (value.length > 0) {
                 objectsList.forEach(element => {
-                    if (element.Title.toLowerCase().includes(query.toLowerCase()))
+                    if (element[field].toLowerCase().includes(value.toLowerCase()))
                         mylist.push(element);
                 });
                 return mylist;
             }
         }
-        else if (query.endsWith('*')) { // abc* -> Title commencant par...
+        else if (value.endsWith('*')) { // abc* -> Title commencant par...
             let mylist = [];
-            query = query.replace('*', '');
-            console.log("Titres finissant par " + query)
+            value = value.replace('*', '');
+            console.log("Titres finissant par " + value)
             objectsList.forEach(element => {
-                if (element.Title.toLowerCase().startsWith(query.toLowerCase()))
+                if (element[field].toLowerCase().startsWith(value.toLowerCase()))
                     mylist.push(element);
             });
             return mylist;
         }
-        else if (query.startsWith('*')) {// *abc -> Title finisant par...
+        else if (value.startsWith('*')) {// *abc -> Title finisant par...
             let mylist = [];
-            query = query.replace('*', '');
-            console.log("Titres commençant par " + query)
+            value = value.replace('*', '');
+            console.log("Titres commençant par " + value)
             objectsList.forEach(element => {
-                if (element.Title.toLowerCase().endsWith(query.toLowerCase()))
+                if (element[field].toLowerCase().endsWith(value.toLowerCase()))
                     mylist.push(element);
             });
             return mylist;
@@ -62,15 +73,18 @@ export default class collectionFilter {
         return mylist;
     }
     static Fields(objectsList, fields) {
-        console.log("Fields function...");     
-        let mylist = [];
+        console.log("Fields function...")
+        let mylist = []
+        console.log(fields)
+        console.log(objectsList)
         objectsList.forEach(element => {
-            mylist.push(Object.fromEntries(fields.map(k => [k, element[k]])));
+            mylist.push(Object.fromEntries(fields.map(k => [k, element[k]])))
         });
         return mylist;
     }
     static Field(field, objectsList) {
         console.log("Field...");
+        console.log(field)
         let mylist = []
         objectsList.forEach(element => {
             if (!mylist.includes(element[field])) {
