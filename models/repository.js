@@ -416,21 +416,6 @@ export default class Repository {
         }
         return [isvalid, myFields, paramError];
     }
-    /*CheckField(fieldString) {
-        console.log("check field");
-        console.log(fieldString)
-        let paramError = { error: '' };
-        let isvalid = true;
-        let field = fieldString[0].toUpperCase() + fieldString.slice(1);
-        if (!this.model.isMember(field)) {
-            isvalid = false;
-            if (field.length < 1)
-                paramError.error = `Erreur dans l'écriture des paramètres fields.`;
-            else
-                paramError.error = `Le modèle de données ${this.objectsName} ne contient pas la propriété '${field}'.`;
-        }
-        return [isvalid, field, paramError];
-    }*/
     CheckLimitOffset(limit, offset) {
 
         let isvalid = true
