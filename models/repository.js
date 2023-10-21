@@ -7,8 +7,8 @@ import queryString from "query-string";
 import collectionFilter from "../collectionFilter.js";
 import { count } from "console";
 
-globalThis.jsonFilesPath = "jsonFiles";
-globalThis.repositoryEtags = {};
+global.jsonFilesPath = "jsonFiles";
+global.repositoryEtags = {};
 
 
 export default class Repository {
@@ -21,13 +21,17 @@ export default class Repository {
         this.cached = cached;
     }
     initEtag() {
-        if (this.objectsName in repositoryEtags)
-            this.ETag = repositoryEtags[this.objectsName];
+        if (this.objectsName in global.repositoryEtags){
+          console.log("init etag");
+          console.log(this.objectsName);
+            this.ETag = global.repositoryEtags[this.objectsName];
+        }
         else this.newETag();
     }
     newETag() {
+      console.log("new etag");
         this.ETag = uuidv1();
-        repositoryEtags[this.objectsName] = this.ETag;
+        global.repositoryEtags[this.objectsName] = this.ETag;
     }
     objects() {
         if (this.objectsList == null) this.read();
@@ -344,7 +348,6 @@ export default class Repository {
         console.log(paramQuery)
         if (!this.model.isMember(field)) {
             isvalid = false;
-            paramError.error = `Le modèle de données "${this.objectsName}" ne contient pas la propriété '${field}'.`;
         }
         if (value.includes("*")) {
             let indexes = this.indexesOf(value, '*')
