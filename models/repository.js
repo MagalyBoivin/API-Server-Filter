@@ -19,8 +19,6 @@ export default class Repository {
         this.objectsFile = `./jsonFiles/${this.objectsName}.json`;
         this.initEtag();
         this.cached = cached;
-        this.error = {error : ''}
-
     }
     initEtag() {
         if (this.objectsName in repositoryEtags)
@@ -135,91 +133,85 @@ export default class Repository {
         return false;
     }
     getAll(requestPayload) {
+        let error = { error_description: '' }
         let objectsList = this.objects();
         let bindedDatas = [];
         if (requestPayload !== null) {
             let [validQuery, paramError, payload, sortParams] = this.validQuery(requestPayload);
             let hasBeenSearched = false
+            console.log(payload)
             if (validQuery) {
-                if (payload.length > 0) {
-                    payload.forEach(element => {
-                        for (const [paramProprety, value] of Object.entries(element)) {
-                            log(FgYellow, "Param " + paramProprety);
-                            console.log(paramProprety)
-                            console.log(value)
-                            let isValid = this.CheckParamFilter(element)
+                if (Object.keys(payload).length > 0) {
+                        for (const param of Object.entries(payload)) {
+                            log(FgYellow, "Param " + param);
+                            let isValid = this.CheckParamFilter(param)
                             if (!isValid) {
                                 bindedDatas = null;
-                                paramError.error = `Le format de la requête '${paramProprety}=${value}' est invalide.`;
+                                error.error_description = `Le format de la requête '${param}' est invalide.`;
                                 break;
                             }
-                            bindedDatas = collectionFilter.Propriete(element, hasBeenSearched ? bindedDatas : objectsList);
+                            bindedDatas = collectionFilter.Propriete(param, hasBeenSearched ? bindedDatas : objectsList);
                             hasBeenSearched = true
                         };
-                    });
-                    if (paramError.error != '')
+                    if (error.error_description != '')
                         return paramError;
                     if (bindedDatas == null)
-                        return { error: `No ${this.model.getClassName()} found` };
-                }
-                if (sortParams.length > 0) {
-                    log(FgYellow, "Sorting...");
-                    console.log(sortParams[0])
-                    sortParams.forEach(param => {
-                        if (Object.keys(param) == 'sort') {
-                            log(FgYellow, "Sort...");
-                            let [estvalide, field, asc, desc, paramError] = this.CheckSortFilter(param['sort']);
-                            if (estvalide) {
-                                bindedDatas = collectionFilter.Sort(field, hasBeenSearched ? bindedDatas : objectsList, asc, desc);
-                                hasBeenSearched = true
-                            }
-                            else {
-                                log(FgRed, paramError.error)
-                                return paramError
-                            }
-                        }
-                        if (Object.keys(param) == 'field') {
-                            log(FgYellow, "Param field");
-                            let [estvalide, fields, paramError] = this.CheckFields(param)
-                            console.log("est valide: " + estvalide)
-                            console.log(fields)
+                        return { error_description: `No ${this.model.getClassName()} found` };
 
-                            if (estvalide) {
-                                bindedDatas = collectionFilter.Field(fields, hasBeenSearched ? bindedDatas : objectsList)
-                                hasBeenSearched = true
-                                //return newObjectsList; // c'est juste une liste, pas une liste d'objets
-                            } else
-                                bindedDatas = null;
-                                return bindedDatas = paramError;
+                }// end params proprety
+                if (Object.keys(sortParams).length > 0) {
+                    log(FgYellow, "Sorting...");
+                    console.log(sortParams)
+                    //object.hasOwnProperty('key')
+                    if (sortParams.hasOwnProperty('sort')) {
+                        log(FgYellow, "Sort...");
+                        let [estvalide, field, asc, desc, paramError] = this.CheckSortFilter(sortParams['sort']);
+                        if (estvalide) {
+                            bindedDatas = collectionFilter.Sort(field, hasBeenSearched ? bindedDatas : objectsList, asc, desc);
+                            hasBeenSearched = true
+                        } else
+                            error.error_description = paramError.error
+                    }
+                    if (sortParams.hasOwnProperty('field') && paramError.error == '') {
+                        log(FgYellow, "Param field");
+                        let [estvalide, fields, paramError] = this.CheckFields(sortParams["field"])
+                        if (estvalide) {
+                            bindedDatas = collectionFilter.Field(fields, hasBeenSearched ? bindedDatas : objectsList)
+                            hasBeenSearched = true
+                            //return newObjectsList; // c'est juste une liste, pas une liste d'objets
+                        } else
+                            paramError.error = paramError;
+                    }
+                    if (sortParams.hasOwnProperty('fields') && paramError.error == '') {
+                        log(FgYellow, "Param fieldsss");
+                        let [estvalide, fields, paramError] = this.CheckFields(sortParams["fields"])
+                        if (estvalide) {
+                            bindedDatas = collectionFilter.Fields(hasBeenSearched ? bindedDatas : objectsList, fields);
+                            hasBeenSearched = true
                         }
-                        if (Object.keys(param) == 'fields') {
-                            log(FgYellow, "Param fieldsss");
-                            let [estvalide, fields, paramError] = this.CheckFields(param)
-                            if (estvalide) {
-                                bindedDatas = collectionFilter.Fields(hasBeenSearched ? bindedDatas : objectsList, fields);
-                                hasBeenSearched = true
-                            }
-                            else
-                                bindedDatas = paramError
+                        else
+                            error.error_description = paramError.error;
+                    }
+                    if (sortParams.hasOwnProperty('limit') && error.error_description == '') {
+                        log(FgYellow, "Param limit offset");
+                        let [estvalid, paramError] = this.CheckLimitOffset(requestPayload['limit'], requestPayload['offset']);
+                        if (estvalid) {
+                            bindedDatas = collectionFilter.LimitOffset(requestPayload['limit'], requestPayload['offset'], hasBeenSearched ? bindedDatas : objectsList)
                         }
-                        if (Object.keys(param) == 'limit') {
-                            log(FgYellow, "Param limit offset");
-                            let [estvalid, paramError] = this.CheckLimitOffset(requestPayload['limit'], requestPayload['offset']);
-                            if (estvalid) {
-                                bindedDatas = collectionFilter.LimitOffset(requestPayload['limit'], requestPayload['offset'], hasBeenSearched ? bindedDatas : objectsList)
-                            }
-                            else return paramError;
-                        }
-                    });
-                }
-            } else
+                        else error.error_description = paramError.error;
+                    }
+                } // end sort param
+            }
+            else // invalid querry
                 return paramError;
         }
         else {
             log(FgYellow, "No request payload -> GetAll ");
             bindedDatas = objectsList;
         }
-        return bindedDatas.length > 0 ? bindedDatas : {error: "Ressources not found"};
+        if (bindedDatas != null) return bindedDatas
+        else return null
+
     }
     get(id) {
         for (let object of this.objects()) {
@@ -260,12 +252,11 @@ export default class Repository {
 
     validQuery(payload) {
         log(FgYellow, "Validating query...");
-        console.log(payload)
         let paramError = { error: '' }
         let isValid = true
-        let myPayload = []
-        let sortParams = []
-        let validSortParams = ['sort', 'limit', 'offset', 'field', 'fields']
+        let myPayload = {}
+        let sortParams = {}
+        let validSortParams = ['sort', 'limit', 'offset', 'fields']
         for (let [param, value] of Object.entries(payload)) {
             if (value == undefined || value == '') {
                 paramError.error = `Value of '${param}' parameter missing.`
@@ -277,8 +268,8 @@ export default class Repository {
                     paramError.error = `Parameter '${param}' invalid.`
                     isValid = false
                 }
-                else myPayload.push({ [param]: value })
-            } else sortParams.push({ [param]: value })
+                else myPayload[param] = value
+            } else sortParams[param] = value
         }
         console.log(sortParams)
         if ('limit' in payload) {
@@ -293,10 +284,14 @@ export default class Repository {
                 isValid = false
             }
         }
-        if('field' in payload && 'fields' in payload){
+        if ('field' in payload && 'fields' in payload) { // todo: faire en sorte qu'ils peuvent l'être
             isValid = false
             paramError.error = 'Query error: fields and field cannot be in the same query';
         }
+        console.log("sorting fields: ")
+        console.log(myPayload)
+        console.log("sort: ")
+        console.log(sortParams)
         return [isValid, paramError, myPayload, sortParams];
     }
 
@@ -311,8 +306,6 @@ export default class Repository {
         if (sortQuery.includes(',')) {
             filter = sortQuery.split(',')[0];
             filter = filter[0].toUpperCase() + filter.slice(1)
-            if (filter.toUpperCase() == 'NAME')
-                filter = 'Title'
             if (sortQuery.split(',')[1] == 'asc')
                 asc = true;
             else if (sortQuery.split(',')[1] == 'desc') {
@@ -343,8 +336,10 @@ export default class Repository {
 
     CheckParamFilter(paramQuery) { // check if model has the param proprety 
         let isvalid = true;
-        let field = Object.keys(paramQuery);
-        let value = paramQuery[field];
+        let field = paramQuery[0]
+        let value = paramQuery[1];
+        console.log(field)
+        console.log(value)
         console.log("Param query:")
         console.log(paramQuery)
         if (!this.model.isMember(field)) {
@@ -388,19 +383,17 @@ export default class Repository {
         let myFields = [];
         let isvalid = true
         let paramError = { error: "" }
-        if (Object.keys(param) == 'field') { // voir seulement ce field
-            if (!this.model.isMember(param['field'])) {
+        /*if (Object.keys(param) == 'field') { // voir seulement ce field
+            if (!this.model.isMember(param)) {
                 isvalid = false;
-                if (param['field'].length < 1)
+                if (param.length < 1)
                     paramError.error = `Field parameter invalid.`;
                 else
-                    paramError.error = `${this.objectsName} does not contain the '${param['field']}' property.`;
+                    paramError.error = `${this.objectsName} does not contain the '${param}' property.`;
             }
-            return [isvalid, param['field'], paramError];
-        } else { // fields voir ces propriétés...
-            let paramError = { error: '' };
-            let isvalid = true;
-            let fields = param['fields'].split(',');
+            return [isvalid, param, paramError];
+        } */ // fields voir ces propriétés...
+            let fields = param.split(',');
             fields.forEach(field => {
                 field = field[0].toUpperCase() + field.slice(1);
                 myFields.push(field)
@@ -413,14 +406,14 @@ export default class Repository {
                 }
             });
             console.log(myFields);
-        }
+        
         return [isvalid, myFields, paramError];
     }
     CheckLimitOffset(limit, offset) {
 
         let isvalid = true
         let paramError = { error: '' }
-        console.log(" limit: " + limit + " offset: " + offset);
+        //console.log(" limit: " + limit + " offset: " + offset);
         if (!this.isPositiveInteger(limit)) {
             isvalid = false;
             paramError.error = `Limit parameter must be an integer greater or equal to 0`;
